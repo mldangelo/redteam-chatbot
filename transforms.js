@@ -9,7 +9,7 @@ module.exports = {
       // Array.isArray(prompt) && prompt.every(msg => msg.role && msg.content)
       return prompt;
     } catch {
-      return JSON.stringify([{ role: 'user', content: prompt }]);
+      return JSON.stringify([{ role: "user", content: prompt }]);
     }
   },
   response: (json, text) => {
@@ -21,7 +21,7 @@ module.exports = {
     }
     const length = json.chat_history.length;
     const lastMessage = json.chat_history[length - 1].content;
-    if (typeof lastMessage !== 'string') {
+    if (typeof lastMessage !== "string") {
       throw new Error(
         `No last message found in chat history: ${JSON.stringify(json.chat_history)}`,
       );
