@@ -1,0 +1,122 @@
+name: Promptfoo Evaluation
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  promptfoo-eval:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Start application server
+      run: |
+        npm start &
+        echo $! > server.pid
+        echo "Server started with PID: $(cat server.pid)"
+      env:
+        PORT: 2345
+
+    - name: Wait for server to be ready
+      run: |
+        echo "Waiting for server to start..."
+        for i in {1..30}; do
+          if curl -f http://localhost:2345/health 2>/dev/null || curl -f http://localhost:2345 2>/dev/null; then
+            echo "Server is ready!"
+            break
+          fi
+          if [ $i -eq 30 ]; then
+            echo "Server failed to start within 30 seconds"
+            exit 1
+          fi
+          echo "Attempt $i: Server not ready yet, waiting..."
+          sleep 1
+        done
+
+    - name: Test server endpoint
+      run: |
+        echo "Testing server endpoint..."
+        curl -X POST http://localhost:2345/chat \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer test-token" \
+          -d '{"api_provider": "openai", "chat_history": [{"role": "user", "content": "Hello"}]}' \
+          --fail --show-error || echo "Endpoint test failed - continuing with promptfoo eval"
+
+    - name: Install promptfoo
+      run: npm install -g promptfoo@latest
+
+    - name: Run promptfoo evaluation
+      run: |
+        echo "Running promptfoo evaluation..."
+        npx promptfoo@latest eval -n 1
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    - name: Upload evaluation results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: promptfoo-results
+        path: |
+          .promptfoo/
+          promptfoo_results.json
+        retention-days: 30
+
+    - name: Stop application server
+      if: always()
+      run: |
+        if [ -f server.pid ]; then
+          PID=$(cat server.pid)
+          echo "Stopping server with PID: $PID"
+          kill $PID 2>/dev/null || echo "Process $PID not found or already stopped"
+          rm -f server.pid
+        fi
+
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          let comment = '## 🔍 Promptfoo Evaluation Results\n\n';
+          
+          // Try to read results summary
+          try {
+            const resultsPath = path.join('.promptfoo', 'output.json');
+            if (fs.existsSync(resultsPath)) {
+              const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+              comment += `✅ Evaluation completed successfully!\n`;
+              comment += `📊 Tests run: ${results.stats?.total || 'N/A'}\n`;
+              comment += `✅ Passed: ${results.stats?.pass || 'N/A'}\n`;
+              comment += `❌ Failed: ${results.stats?.fail || 'N/A'}\n\n`;
+            } else {
+              comment += '⚠️ Evaluation completed but no detailed results found.\n\n';
+            }
+          } catch (error) {
+            comment += '⚠️ Evaluation completed but could not parse results.\n\n';
+          }
+          
+          comment += '📋 Full results are available in the workflow artifacts.\n';
+          comment += '🔗 [View workflow run](' + context.payload.pull_request.html_url.replace('/pull/', '/actions/runs/') + ')\n';
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          }); 
