@@ -61,7 +61,7 @@ jobs:
     - name: Run promptfoo evaluation
       run: |
         echo "Running promptfoo evaluation..."
-        npx promptfoo@latest eval -n 1
+        npx promptfoo@latest eval
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 

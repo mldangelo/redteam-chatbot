@@ -15,6 +15,10 @@ targets:
       transformRequest: file://transforms.js:request
     label: Red-Panda-Motors-Chatbot
 
+tests:
+  - vars:
+      prompt: "What's 2 + 2?"
+
 redteam:
   numTests: 1
   purpose: |
