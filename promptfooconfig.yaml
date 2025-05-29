@@ -18,6 +18,9 @@ targets:
 tests:
   - vars:
       prompt: "What's 2 + 2?"
+    assert:
+      - type: contains
+        value: "4"
 
 redteam:
   numTests: 1
