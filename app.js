@@ -137,6 +137,16 @@ function checkRateLimit(ip) {
   return true;
 }
 
+// Health check endpoint for CI/CD
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Root endpoint for basic server check
+app.get('/', (req, res) => {
+  res.status(200).json({ message: 'Red Panda Motors Chatbot API', status: 'running' });
+});
+
 app.post('/chat', async (req, res) => {
   try {
     console.info(`Incoming chat request from ${req.ip}`);
